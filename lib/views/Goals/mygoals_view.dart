@@ -29,9 +29,10 @@ class _MygoalsViewState extends State<MygoalsView> {
     });
     
     final goalsProvider = Provider.of<GoalsProvider>(context, listen: false);
-    _goals = await goalsProvider.loadGoals();
+    await goalsProvider.loadGoals();
     
     setState(() {
+      _goals = goalsProvider.goals;
       _isLoading = false;
     });
   }

@@ -29,26 +29,26 @@ class _ThisWeekViewState extends State<ThisWeekView> {
     });
     
     final goalsProvider = Provider.of<GoalsProvider>(context, listen: false);
-    final allGoals = await goalsProvider.loadGoals();
+    await goalsProvider.loadGoals();
+    final allGoals = goalsProvider.goals;
     
     // Filter goals for this week
     final now = DateTime.now();
     final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
     final endOfWeek = startOfWeek.add(Duration(days: 6));
     
-    _thisWeekGoals = allGoals.where((goal) {
-      if (goal.deadline == null) return false;
-      
-      try {
-        final deadline = DateTime.parse(goal.deadline!);
-        return deadline.isAfter(startOfWeek) && 
-               deadline.isBefore(endOfWeek.add(Duration(days: 1)));
-      } catch (e) {
-        return false;
-      }
-    }).toList();
-    
     setState(() {
+      _thisWeekGoals = allGoals.where((goal) {
+        if (goal.deadline == null) return false;
+        
+        try {
+          final deadline = DateTime.parse(goal.deadline!);
+          return deadline.isAfter(startOfWeek) && 
+                 deadline.isBefore(endOfWeek.add(Duration(days: 1)));
+        } catch (e) {
+          return false;
+        }
+      }).toList();
       _isLoading = false;
     });
   }
