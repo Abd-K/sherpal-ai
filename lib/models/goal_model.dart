@@ -5,6 +5,13 @@ class Goal {
   String deadline;
   String lastUpdated;
   String category;
+  String? goalType; // work, fitness, general
+  String? measurementType; // time, checkbox, reps, weight, distance
+  String? targetValue;
+  String? currentValue;
+  int? parentId; // For objectives (sub-goals)
+  bool isCompleted;
+  String? bestValue;
 
   Goal({
     this.id,
@@ -13,6 +20,13 @@ class Goal {
     required this.deadline,
     required this.lastUpdated,
     required this.category,
+    this.goalType,
+    this.measurementType,
+    this.targetValue,
+    this.currentValue,
+    this.parentId,
+    this.isCompleted = false,
+    this.bestValue,
   });
 
   // Convert a Goal object into a Map
@@ -24,6 +38,13 @@ class Goal {
       'deadline': deadline,
       'lastUpdated': lastUpdated,
       'category': category,
+      'goalType': goalType,
+      'measurementType': measurementType,
+      'targetValue': targetValue,
+      'currentValue': currentValue,
+      'parentId': parentId,
+      'isCompleted': isCompleted ? 1 : 0,
+      'bestValue': bestValue,
     };
   }
 
@@ -36,6 +57,13 @@ class Goal {
       deadline: map['deadline'],
       lastUpdated: map['lastUpdated'],
       category: map['category'],
+      goalType: map['goalType'],
+      measurementType: map['measurementType'],
+      targetValue: map['targetValue'],
+      currentValue: map['currentValue'],
+      parentId: map['parentId'],
+      isCompleted: map['isCompleted'] == 1,
+      bestValue: map['bestValue'],
     );
   }
 }

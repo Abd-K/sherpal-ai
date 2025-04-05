@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:sherpal/constants.dart';
+import 'package:sherpal/models/database_model.dart';
+import 'package:sherpal/models/goal_model.dart';
+import 'package:sherpal/models/goals_provider_model.dart';
+import 'package:sherpal/views/Goals/new_goal_view.dart';
 import 'package:sherpal/views/Goals/subgoal_view.dart';
+import 'package:sherpal/widgets/custom_button.dart';
 
 class GoalScreen extends StatefulWidget {
-  const GoalScreen({super.key});
+  final int goalId;
+  
+  const GoalScreen({super.key, required this.goalId});
 
   @override
   State<GoalScreen> createState() => _GoalScreenState();
@@ -12,496 +21,636 @@ class GoalScreen extends StatefulWidget {
 
 class _GoalScreenState extends State<GoalScreen> {
   bool show = false;
-  final List<String> tasks = [
-    "Update CV",
-    "Brush Up Coding Skills",
-    "Just Another Space Filler",
-    "Just Another Space Filler",
-    "Just Another Space Filler",
-    "Just Another Space Filler",
-  ];
+  bool _isLoading = true;
+  Goal? _goal;
+  List<Goal> _objectives = [];
+  final TextEditingController _progressController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Job Prep',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
+  void initState() {
+    super.initState();
+    _loadGoalData();
+  }
+  
+  @override
+  void dispose() {
+    _progressController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+  
+  // Load goal data and objectives
+  Future<void> _loadGoalData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    final goalsProvider = Provider.of<GoalsProvider>(context, listen: false);
+    
+    // Load goal
+    _goal = await goalsProvider.getGoal(widget.goalId);
+    
+    // Load objectives
+    if (_goal != null) {
+      _objectives = await goalsProvider.getObjectives(_goal!.id!);
+      _descriptionController.text = _goal!.description;
+      if (_goal!.currentValue != null) {
+        _progressController.text = _goal!.currentValue!;
+      }
+    }
+    
+    setState(() {
+      _isLoading = false;
+    });
+  }
+  
+  // Update goal progress
+  void _updateProgress() {
+    if (_goal == null || _progressController.text.isEmpty) return;
+    
+    Provider.of<GoalsProvider>(context, listen: false)
+        .updateGoalProgress(_goal!.id!, _progressController.text)
+        .then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Progress updated')),
+      );
+      _loadGoalData(); // Reload data
+    });
+  }
+  
+  // Start timer for time-based goals
+  void _startTimer() {
+    // This will be implemented in the timer functionality step
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Timer functionality coming soon')),
+    );
+  }
+  
+  // Update goal description
+  void _updateDescription() {
+    if (_goal == null) return;
+    
+    final updatedGoal = Goal(
+      id: _goal!.id,
+      title: _goal!.title,
+      description: _descriptionController.text,
+      deadline: _goal!.deadline,
+      lastUpdated: DateTime.now().toIso8601String(),
+      category: _goal!.category,
+      goalType: _goal!.goalType,
+      measurementType: _goal!.measurementType,
+      targetValue: _goal!.targetValue,
+      currentValue: _goal!.currentValue,
+      parentId: _goal!.parentId,
+      isCompleted: _goal!.isCompleted,
+      bestValue: _goal!.bestValue,
+    );
+    
+    Provider.of<GoalsProvider>(context, listen: false)
+        .updateGoal(updatedGoal)
+        .then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Goal updated')),
+      );
+      _loadGoalData(); // Reload data
+    });
+  }
+  
+  // Add new objective
+  void _addObjective() {
+    if (_goal == null) return;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NewGoal(parentId: _goal!.id),
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 22,
+    ).then((_) {
+      _loadGoalData(); // Reload data when returning from objective creation
+    });
+  }
+  
+  // Navigate to objective details
+  void _navigateToObjective(Goal objective) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SubGoalScreen(objectiveId: objective.id!),
+      ),
+    ).then((_) {
+      _loadGoalData(); // Reload data when returning from objective screen
+    });
+  }
+  
+  // Mark goal as completed
+  void _toggleGoalCompletion() {
+    if (_goal == null) return;
+    
+    Provider.of<GoalsProvider>(context, listen: false)
+        .markGoalCompleted(_goal!.id!, !_goal!.isCompleted)
+        .then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_goal!.isCompleted 
+              ? 'Goal marked as incomplete' 
+              : 'Goal marked as complete'),
+        ),
+      );
+      _loadGoalData(); // Reload data
+    });
+  }
+  
+  // Build progress tracking widget
+  Widget _buildProgressTracking() {
+    if (_goal == null) return SizedBox();
+    
+    // If goal has objectives, don't show progress tracking
+    if (_objectives.isNotEmpty) {
+      return SizedBox();
+    }
+    
+    // For time-based goals
+    if (_goal!.measurementType == DatabaseHelper.measurementTypeTime) {
+      return Container(
+        width: MediaQuery.of(context).size.width,
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Progress',
+              style: TextStyle(
+                color: AppColors.ruby,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
-              Text(
-                'Target Date',
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _progressController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Current progress (minutes)',
+                      hintStyle: TextStyle(color: Colors.grey[500]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _updateProgress,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.ruby,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    'Update',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            CustomButton(
+              gradient: AppColors.rubyHorizontalGradient,
+              text: Text(
+                'Start Timer',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
                 ),
               ),
-              SizedBox(
-                height: 16,
+              ontap: _startTimer,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // For checkbox goals
+    if (_goal!.measurementType == DatabaseHelper.measurementTypeCheckbox) {
+      return Container(
+        width: MediaQuery.of(context).size.width,
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Progress',
+              style: TextStyle(
+                color: AppColors.ruby,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
-              TextField(
-                decoration: InputDecoration(
-                    hintText: 'Select Date',
+            ),
+            SizedBox(height: 16),
+            CheckboxListTile(
+              title: Text('Mark as completed'),
+              value: _goal!.isCompleted,
+              onChanged: (value) {
+                if (value != null) {
+                  _toggleGoalCompletion();
+                }
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // For other measurement types (reps, weight, distance)
+    return Container(
+      width: MediaQuery.of(context).size.width,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Progress',
+            style: TextStyle(
+              color: AppColors.ruby,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _progressController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Current progress',
                     hintStyle: TextStyle(color: Colors.grey[500]),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16.0),
                       borderSide: BorderSide.none,
                     ),
-                    suffixIcon: Padding(
-                      padding: const EdgeInsets.only(top: 9),
-                      child: FaIcon(
-                        FontAwesomeIcons.calendar,
-                      ),
-                    )),
-              ),
-              SizedBox(
-                height: 16,
-              ),
-              Container(
-                height: 230,
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade300),
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notes',
-                      style: TextStyle(
-                        color: AppColors.ruby,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      'Practice For Job interviews',
-                      style: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ),
-                    SizedBox(
-                      height: 8,
-                    ),
-                    ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      itemCount: tasks.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                size: 6,
-                                color: Theme.of(context).cardColor,
+              ),
+              SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: _updateProgress,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.ruby,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  'Update',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          if (_goal!.targetValue != null && _goal!.currentValue != null)
+            LinearProgressIndicator(
+              value: double.tryParse(_goal!.currentValue!) != null && 
+                     double.tryParse(_goal!.targetValue!) != null
+                  ? double.parse(_goal!.currentValue!) / double.parse(_goal!.targetValue!)
+                  : 0,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.ruby),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _goal?.title ?? 'Goal Details',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.check_circle_outline),
+            onPressed: _goal != null ? _toggleGoalCompletion : null,
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addObjective,
+        backgroundColor: AppColors.ruby,
+        child: Icon(
+          Icons.add,
+          color: Colors.white,
+        ),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _goal == null
+              ? Center(child: Text('Goal not found'))
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 22),
+                        Text(
+                          'Target Date',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        TextField(
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            hintText: _goal!.deadline != null
+                                ? DateFormat('yyyy-MM-dd').format(
+                                    DateTime.parse(_goal!.deadline))
+                                : 'No deadline set',
+                            hintStyle: TextStyle(color: Colors.black),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                              borderSide: BorderSide.none,
+                            ),
+                            suffixIcon: Padding(
+                              padding: const EdgeInsets.only(top: 9),
+                              child: FaIcon(
+                                FontAwesomeIcons.calendar,
                               ),
-                              SizedBox(width: 4),
-                              Text(
-                                tasks[index],
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: 16,
-              ),
-              Container(
-                width: MediaQuery.of(context).size.width,
-                height: show ? 280 : 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Advance options',
-                            style: TextStyle(
-                                color: AppColors.ruby,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16),
-                          ),
-                          Spacer(),
-                          FaIcon(
-                            FontAwesomeIcons.pen,
-                            color: Theme.of(context).cardColor,
-                          ),
-                          SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                show = !show;
-                              });
-                            },
-                            child: FaIcon(
-                              show
-                                  ? FontAwesomeIcons.chevronUp
-                                  : FontAwesomeIcons.chevronDown,
-                              color: Theme.of(context).cardColor,
-                              size: 22,
                             ),
                           ),
-                        ],
-                      ),
-                      show
-                          ? Column(
-                              children: [
-                                SizedBox(
-                                  height: 16,
+                        ),
+                        SizedBox(height: 16),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Description',
+                                style: TextStyle(
+                                  color: AppColors.ruby,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
+                              ),
+                              SizedBox(height: 8),
+                              TextField(
+                                controller: _descriptionController,
+                                maxLines: 3,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter description',
+                                  hintStyle: TextStyle(color: Colors.grey[500]),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16.0),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onEditingComplete: _updateDescription,
+                              ),
+                              SizedBox(height: 8),
+                              if (_objectives.isNotEmpty) ...[
+                                SizedBox(height: 16),
                                 Text(
-                                  'Goal Type',
+                                  'Objectives',
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    color: AppColors.ruby,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                SizedBox(
-                                  height: 16,
-                                ),
-                                TextField(
-                                  decoration: InputDecoration(
-                                    hintText: 'Select Goal Type',
-                                    hintStyle:
-                                        TextStyle(color: Colors.grey[500]),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16.0),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    suffixIcon: Padding(
-                                      padding: const EdgeInsets.only(top: 9),
-                                      child: FaIcon(
-                                        FontAwesomeIcons.chevronDown,
+                                SizedBox(height: 8),
+                                ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: _objectives.length,
+                                  itemBuilder: (context, index) {
+                                    final objective = _objectives[index];
+                                    return GestureDetector(
+                                      onTap: () => _navigateToObjective(objective),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 6),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              objective.isCompleted
+                                                  ? Icons.check_circle
+                                                  : Icons.circle_outlined,
+                                              size: 16,
+                                              color: objective.isCompleted
+                                                  ? AppColors.ruby
+                                                  : Theme.of(context).cardColor,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                objective.title,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  height: 1.2,
+                                                  decoration: objective.isCompleted
+                                                      ? TextDecoration.lineThrough
+                                                      : null,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.chevron_right,
+                                              color: Theme.of(context).cardColor,
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
-                                SizedBox(
-                                  height: 16,
-                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        _buildProgressTracking(),
+                        SizedBox(height: 16),
+                        Container(
+                          width: MediaQuery.of(context).size.width,
+                          height: show ? 280 : 60,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Row(
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Measurment',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            height: 16,
-                                          ),
-                                          TextField(
-                                            decoration: InputDecoration(
-                                              hintText: 'Time (min)',
-                                              hintStyle: TextStyle(
-                                                  color: Colors.grey[500],
-                                                  fontSize: 14),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16.0),
-                                                borderSide: BorderSide.none,
-                                              ),
-                                              suffixIcon: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 9,
-                                                ),
-                                                child: FaIcon(
-                                                  FontAwesomeIcons.chevronDown,
-                                                  size: 22,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                    Text(
+                                      'Advanced options',
+                                      style: TextStyle(
+                                        color: AppColors.ruby,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
                                       ),
                                     ),
-                                    SizedBox(
-                                      width: 16,
+                                    Spacer(),
+                                    FaIcon(
+                                      FontAwesomeIcons.pen,
+                                      color: Theme.of(context).cardColor,
                                     ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Target',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            height: 16,
-                                          ),
-                                          TextField(
-                                              decoration: InputDecoration(
-                                            hintText: 'Enter Target',
-                                            hintStyle: TextStyle(
-                                                color: Colors.grey[500],
-                                                fontSize: 14),
-                                            border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16.0),
-                                              borderSide: BorderSide.none,
-                                            ),
-                                          )),
-                                        ],
+                                    SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          show = !show;
+                                        });
+                                      },
+                                      child: FaIcon(
+                                        show
+                                            ? FontAwesomeIcons.chevronUp
+                                            : FontAwesomeIcons.chevronDown,
+                                        color: Theme.of(context).cardColor,
+                                        size: 22,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ],
-                            )
-                          : Container(),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 16,
-              ),
-              Container(
-                height: 450,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                  child: ListView.separated(
-                    physics: NeverScrollableScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => SubGoalScreen(),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: EdgeInsets.only(right: 16),
-                          height: 70,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: Colors.grey.shade100,
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 16,
-                              ),
-                              Container(
-                                height: 40,
-                                width: 40,
-                                decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.grey.shade400,
-                                    ),
-                                    color: Colors.blue.shade100),
-                                child: Center(
-                                  child: Text(
-                                    '0',
+                                if (show) ...[
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Goal Type',
                                     style: TextStyle(
-                                      color: AppColors.mediumGrey,
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 8,
-                              ),
-                              SizedBox(
-                                width: MediaQuery.of(context).size.width - 190,
-                                child: Text.rich(
-                                  TextSpan(
+                                  SizedBox(height: 16),
+                                  TextField(
+                                    readOnly: true,
+                                    decoration: InputDecoration(
+                                      hintText: _goal!.goalType != null
+                                          ? _goal!.goalType!.substring(0, 1).toUpperCase() +
+                                              _goal!.goalType!.substring(1)
+                                          : 'Not set',
+                                      hintStyle: TextStyle(color: Colors.black),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16.0),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Row(
                                     children: [
-                                      TextSpan(
-                                        text:
-                                            "Build Simple Marketing Campaign: ",
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontWeight: FontWeight.w500,
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Measurement',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            SizedBox(height: 16),
+                                            TextField(
+                                              readOnly: true,
+                                              decoration: InputDecoration(
+                                                hintText: _goal!.measurementType != null
+                                                    ? _goal!.measurementType!.substring(0, 1).toUpperCase() +
+                                                        _goal!.measurementType!.substring(1)
+                                                    : 'Not set',
+                                                hintStyle: TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 14,
+                                                ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(16.0),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      TextSpan(
-                                        text: "240 Min",
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black,
+                                      SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Target',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            SizedBox(height: 16),
+                                            TextField(
+                                              readOnly: true,
+                                              decoration: InputDecoration(
+                                                hintText: _goal!.targetValue ?? 'Not set',
+                                                hintStyle: TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 14,
+                                                ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(16.0),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                  softWrap: true,
-                                  overflow: TextOverflow.visible,
-                                  maxLines: 2,
-                                ),
-                              ),
-                              Spacer(),
-                              PopupMenuButton<String>(
-                                padding: EdgeInsets.zero,
-                                position: PopupMenuPosition.under,
-                                icon: FaIcon(FontAwesomeIcons.ellipsisVertical),
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: 'target this week',
-                                    child: ListTile(
-                                      leading: FaIcon(
-                                        FontAwesomeIcons.solidEnvelope,
-                                        color: AppColors.ruby,
-                                      ),
-                                      title: Text('Target This Week'),
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'convert to goal',
-                                    child: ListTile(
-                                      leading: FaIcon(
-                                        FontAwesomeIcons.gear,
-                                        color: AppColors.ruby,
-                                      ),
-                                      title: Text('Convert To Goal'),
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'log history',
-                                    child: ListTile(
-                                      leading: FaIcon(
-                                        // ignore: deprecated_member_use
-                                        FontAwesomeIcons.shieldAlt,
-                                        color: AppColors.ruby,
-                                      ),
-                                      title: Text('Log History'),
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: ListTile(
-                                      leading: FaIcon(
-                                        // ignore: deprecated_member_use
-                                        FontAwesomeIcons.shieldAlt,
-                                        color: AppColors.ruby,
-                                      ),
-                                      title: Text('Delete'),
-                                    ),
-                                  ),
                                 ],
-                                onSelected: (value) {
-                                  //   switch (value) {
-                                  //     case 'ContactUsPage':
-                                  //       Navigator.push(
-                                  //         context,
-                                  //         MaterialPageRoute(builder: (context) => ContactUs()),
-                                  //       );
-                                  //       break;
-                                  //     case 'AccountPage':
-                                  //       Navigator.push(
-                                  //         context,
-                                  //         MaterialPageRoute(builder: (context) => Account()),
-                                  //       );
-                                  //       break;
-                                  //     case 'PrivacySettingsPage':
-                                  //       Navigator.push(
-                                  //         context,
-                                  //         MaterialPageRoute(
-                                  //             builder: (context) => PrivacySettings()),
-                                  //       );
-                                  //       break;
-                                  //   }
-                                },
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      );
-                    },
-                    separatorBuilder: (context, index) {
-                      return SizedBox(
-                        height: 16,
-                      );
-                    },
-                    itemCount: 5,
+                        SizedBox(height: 80), // Space for FAB
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                height: 16,
-              ),
-              Container(
-                height: 60,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade500),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FaIcon(FontAwesomeIcons.add, color: Colors.grey.shade500),
-                    SizedBox(
-                      width: 8,
-                    ),
-                    Text(
-                      'Add Objective',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade500,
-                          fontSize: 16),
-                    )
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: 32,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
