@@ -8,7 +8,9 @@ import 'package:sherpal/models/goal_model.dart';
 import 'package:sherpal/models/goals_provider_model.dart';
 import 'package:sherpal/views/Goals/new_goal_view.dart';
 import 'package:sherpal/views/Goals/subgoal_view.dart';
+import 'package:sherpal/views/Goals/timer_screen.dart';
 import 'package:sherpal/widgets/custom_button.dart';
+import 'package:sherpal/widgets/progress_tracking_widget.dart';
 
 class GoalScreen extends StatefulWidget {
   final int goalId;
@@ -66,11 +68,11 @@ class _GoalScreenState extends State<GoalScreen> {
   }
   
   // Update goal progress
-  void _updateProgress() {
-    if (_goal == null || _progressController.text.isEmpty) return;
+  void _updateProgress(String value) {
+    if (_goal == null || value.isEmpty) return;
     
     Provider.of<GoalsProvider>(context, listen: false)
-        .updateGoalProgress(_goal!.id!, _progressController.text)
+        .updateGoalProgress(_goal!.id!, value)
         .then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Progress updated')),
@@ -81,10 +83,16 @@ class _GoalScreenState extends State<GoalScreen> {
   
   // Start timer for time-based goals
   void _startTimer() {
-    // This will be implemented in the timer functionality step
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Timer functionality coming soon')),
-    );
+    if (_goal == null) return;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TimerScreen(goalId: _goal!.id!),
+      ),
+    ).then((_) {
+      _loadGoalData(); // Reload data when returning from timer screen
+    });
   }
   
   // Update goal description
@@ -170,177 +178,11 @@ class _GoalScreenState extends State<GoalScreen> {
       return SizedBox();
     }
     
-    // For time-based goals
-    if (_goal!.measurementType == DatabaseHelper.measurementTypeTime) {
-      return Container(
-        width: MediaQuery.of(context).size.width,
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Progress',
-              style: TextStyle(
-                color: AppColors.ruby,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _progressController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Current progress (minutes)',
-                      hintStyle: TextStyle(color: Colors.grey[500]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 16),
-                ElevatedButton(
-                  onPressed: _updateProgress,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ruby,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: Text(
-                    'Update',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            CustomButton(
-              gradient: AppColors.rubyHorizontalGradient,
-              text: Text(
-                'Start Timer',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-              ontap: _startTimer,
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // For checkbox goals
-    if (_goal!.measurementType == DatabaseHelper.measurementTypeCheckbox) {
-      return Container(
-        width: MediaQuery.of(context).size.width,
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Progress',
-              style: TextStyle(
-                color: AppColors.ruby,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            SizedBox(height: 16),
-            CheckboxListTile(
-              title: Text('Mark as completed'),
-              value: _goal!.isCompleted,
-              onChanged: (value) {
-                if (value != null) {
-                  _toggleGoalCompletion();
-                }
-              },
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // For other measurement types (reps, weight, distance)
-    return Container(
-      width: MediaQuery.of(context).size.width,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Progress',
-            style: TextStyle(
-              color: AppColors.ruby,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _progressController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: 'Current progress',
-                    hintStyle: TextStyle(color: Colors.grey[500]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: _updateProgress,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ruby,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  'Update',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16),
-          if (_goal!.targetValue != null && _goal!.currentValue != null)
-            LinearProgressIndicator(
-              value: double.tryParse(_goal!.currentValue!) != null && 
-                     double.tryParse(_goal!.targetValue!) != null
-                  ? double.parse(_goal!.currentValue!) / double.parse(_goal!.targetValue!)
-                  : 0,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.ruby),
-            ),
-        ],
-      ),
+    return ProgressTrackingWidget(
+      goal: _goal!,
+      onProgressUpdate: _updateProgress,
+      onTimerStart: _startTimer,
+      progressController: _progressController,
     );
   }
 
