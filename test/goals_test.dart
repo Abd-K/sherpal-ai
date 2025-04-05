@@ -96,7 +96,7 @@ void main() {
         title: 'Test Goal',
         description: 'Test Description',
         targetValue: '100',
-        currentValue: '25',
+        currentValue: '25', deadline: '', lastUpdated: '', category: '',
       );
       
       // Progress should be 25%
@@ -118,14 +118,14 @@ void main() {
     test('Goal Completion Status', () {
       final goal = Goal(
         title: 'Test Goal',
-        isCompleted: true,
+        isCompleted: true,  description: '', deadline: '', lastUpdated: '', category: '',
       );
       
       expect(goal.isCompleted, true);
       
       final updatedGoal = Goal(
         title: 'Test Goal',
-        isCompleted: false,
+        isCompleted: false, description: '', deadline: '', lastUpdated: '', category: '',
       );
       
       expect(updatedGoal.isCompleted, false);
